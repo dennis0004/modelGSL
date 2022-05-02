@@ -4,7 +4,7 @@
 
 @author: cwleung
 """
-# concurrent learning (2p), 1 vs all-1 (CL)
+# generalized social learning (2p), 1 vs m
 
 import os
 import numpy as np
@@ -13,8 +13,14 @@ import pickle
 import datetime
 import time
 
+import sys
+sys.path.append('../MAS_Environments')
+sys.path.append('../MAS_Agents')
+
 from Environment02 import Environment02
 from Agent02 import Agent02
+
+from GameAssignment01 import GameAssignment01
 
 simStart = 1
 Nsim = 100
@@ -25,6 +31,10 @@ T = 300
 Nagent = 2000
 
 Nplayer = 2
+
+m = 1
+# m = 2
+# m = 5
 
 lr = 0.1
 tau = 2
@@ -41,7 +51,7 @@ initPara = '{(0, 0)- 1}'
 
 initDist = 'pmf'
 
-dirName = 'result_Q-boltzmann_%s_lr%.2f_tau%.1f_Q0-%s%s_N%d_CL' % (gameName, lr, tau, initDist, initPara, Nagent)
+dirName = 'result_Q-boltzmann_%s_lr%.2f_tau%.1f_Q0-%s%s_N%d_m%d_aa' % (gameName, lr, tau, initDist, initPara, Nagent, m)
 print(dirName)
 
 if not os.path.exists(dirName):
@@ -67,6 +77,7 @@ reward1s['3RPS'] = np.array([[0, -1, 1], [1, 0, -1], [-1, 1, 0]])
 reward2s['3RPS'] = np.array([[0, 1, -1], [-1, 0, 1], [1, -1, 0]])
 
 env = Environment02(Nact, reward1s[gameName], reward2s[gameName])
+ga = GameAssignment01()
 
 t1 = time.time()
 for sim in range(simStart, Nsim + 1):
@@ -88,9 +99,9 @@ for sim in range(simStart, Nsim + 1):
             agent = Agent02(env,
                             lr=lr,
                             tau=tau)
-            if initPara == '{(1, 0)- 1}':
-                agent.Q[0] = 1
             if initPara == '{(1, 0, 0)- 1}':
+                agent.Q[0] = 1
+            if initPara == '{(1, 0)- 1}':
                 agent.Q[0] = 1
             agents.append(agent)
     else:
@@ -100,6 +111,8 @@ for sim in range(simStart, Nsim + 1):
         f01.close()
 
     for t in range(tStart, T + 1):
+        agentsVS = ga.genAgentsVS(Nagent, m)
+
         # draw actions
         actions = []
         xbar = np.zeros(Nact, dtype=np.float)
@@ -133,17 +146,16 @@ for sim in range(simStart, Nsim + 1):
 
         # play games
         for i, agent in enumerate(agents):
-            countAction[actions[i]] -= 1
+            subActions = actions[agentsVS[i]]
+            countSubAction = Counter(subActions)
 
             avgReward = 0
             for a in range(Nact):
                 moves = [actions[i], a]
-                avgReward += countAction[a] * env.getRewards(moves)[0]
-            avgReward /= (Nagent - 1)
+                avgReward += countSubAction[a] * env.getRewards(moves)[0]
+            avgReward /= m
 
             agent.train(0, actions[i], avgReward, 0)
-
-            countAction[actions[i]] += 1
 
     print('sim:', sim, 'countAction:', countAction)
 
